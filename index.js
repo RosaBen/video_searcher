@@ -40,30 +40,33 @@ const toggleKeyword = (keyword) => {
     reloadArticles();
 };
 
+// console.log("reload", toggleKeyword())
 // The first argument is the keyword's label, what will be visible by the user.
 // It needs to handle uppercase, special characters, etc.
 // The second argument is the value of the checkbox. To be sure to not have bugs, we generally
 // put it in lowercase and without special characters.
 const addNewKeyword = (label, keyword) => {
     resetInput();
+    // Nettoyer et vérifier les entrées
+    const trimmedLabel = label ? label.trim() : '';
+    const trimmedKeyword = keyword ? keyword.trim() : '';
+    if (!trimmedLabel || !trimmedKeyword) {
+        console.error("Le label ou le mot-clé est vide !");
+        return;
+    }
 
-    if (keywords.includes(keyword)) {
+    if (keywords.includes(trimmedKeyword)) {
         console.warn("You already added this keyword. Nothing happens.");
         return;
     }
 
-    if (!label || !keyword) {
-        console.error("It seems you forgot to write the label or keyword in the addNewKeyword function");
-        return;
-    }
-
-    keywords.push(keyword);
-    currentKeywords.push(keyword);
+    keywords.push(trimmedKeyword);
+    currentKeywords.push(trimmedKeyword);
 
     document.querySelector('.keywordsList').innerHTML += `
         <div>
-            <input id="${label}" value="${keyword}" type="checkbox" checked onchange="toggleKeyword(this.value)">
-            <label for="${label}">${label}</label>
+            <input id="${trimmedLabel}" value="${trimmedKeyword}" type="checkbox" checked onchange="toggleKeyword(this.value)">
+            <label for="${trimmedLabel}">${trimmedLabel}</label>
         </div>
     `;
 
@@ -71,12 +74,20 @@ const addNewKeyword = (label, keyword) => {
     resetKeywordsUl();
 };
 
+// console.log("addnew", addNewKeyword("Programmation", "Javascript"))
 // We reload the articles depends of the currentKeywords
-// TODO: Modify this function to display only articles that contain at least one of the selected keywords.
+// DONE
 const reloadArticles = () => {
     document.querySelector('.articlesList').innerHTML = '';
-    
-    const articlesToShow = data.articles;
+    // On nettoie les mots-clés sélectionnés pour la comparaison
+    const cleanedCurrentKeywords = currentKeywords.map(kw => cleanedKeyword(kw));
+    // On filtre les articles qui ont au moins un tag correspondant
+    const articlesToShow = data.articles.filter(article => {
+        // On nettoie les tags de l'article
+        const cleanedTags = (article.tags || []).map(tag => cleanedKeyword(tag));
+        // On regarde s'il y a une intersection avec les mots-clés sélectionnés
+        return cleanedTags.some(tag => cleanedCurrentKeywords.includes(tag));
+    });
     articlesToShow.forEach((article) => {
         document.querySelector('.articlesList').innerHTML += `
             <article>
@@ -106,29 +117,61 @@ const resetInput = () => {
 };
 
 // Clean a keyword to lowercase and without special characters
-// TODO: Make the cleaning
+// DONE
 const cleanedKeyword = (keyword) => {
-    const cleanedKeyword = keyword;
-
-    return cleanedKeyword;
+    // Remove special characters and convert to lowercase
+    return keyword
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remove accents
+        .replace(/[^a-z0-9]/g, ""); // Remove non-alphanumeric characters
 };
 
-// TODO: Modify this function to show the keyword containing a part of the word inserted
+
+
+// DONE
 // into the form (starting autocompletion at 3 letters).
-// TODO: We also show all the words from the same category than this word.
-// TODO: We show in first the keyword containing a part of the word inserted.
-// TODO: If a keyword is already in the list of presents hashtags (checkbox list), we don't show it.
+// DONE
+// DONE
+// DONE
+// Recherche et suggestion de mots-clés et catégories
 const showKeywordsList = (value) => {
     // Starting at 3 letters inserted in the form, we do something
     if (value.length >= 3) {
         const keyWordUl = document.querySelector(".inputKeywordsHandle ul");
         resetKeywordsUl();
-        
-        // This will allow you to add a new element in the list under the text input
-        // On click, we add the keyword, like so:
-        // keyWordUl.innerHTML += `
-        //    <li onclick="addNewKeyword(`${keyword}`, `${cleanedKeyword(keyword)}`)">${keyword}</li>
-        // `;
+
+        // Mots-clés qui correspondent à la recherche et ne sont pas déjà ajoutés
+        const matchingKeywords = allKeywords.filter(keyword =>
+            cleanedKeyword(keyword).includes(cleanedKeyword(value)) &&
+            !keywords.includes(cleanedKeyword(keyword))
+        );
+
+        // Affiche les mots-clés correspondants
+        matchingKeywords.forEach(keyword => {
+            const liWord = document.createElement("li");
+            liWord.textContent = keyword;
+            liWord.onclick = () => addNewKeyword(keyword, cleanedKeyword(keyword));
+            keyWordUl.appendChild(liWord);
+        });
+
+        // Recherche la catégorie qui correspond à la recherche
+        const category = keywordsCategories.find(cat =>
+            cleanedKeyword(cat.name).includes(cleanedKeyword(value))
+        );
+        if (category) {
+            category.keywords.forEach(keyword => {
+                if (
+                    !matchingKeywords.includes(keyword) &&
+                    !keywords.includes(cleanedKeyword(keyword))
+                ) {
+                    const liWord = document.createElement("li");
+                    liWord.textContent = keyword;
+                    liWord.onclick = () => addNewKeyword(keyword, cleanedKeyword(keyword));
+                    keyWordUl.appendChild(liWord);
+                }
+            });
+        }
     }
 };
 
@@ -141,8 +184,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
     document.querySelector('.addKeywordsForm').addEventListener('submit', (event) => {
         event.preventDefault();
-        const keywordInputValue = inputElement.value;
-        addNewKeyword(keywordInputValue, cleanedKeyword(keywordInputValue));
+        const keywordInputValue = inputElement.value.trim(); // Enlève les espaces
+        const cleanedValue = cleanedKeyword(keywordInputValue);
+        // Vérification avant d'appeler addNewKeyword
+        if (keywordInputValue && cleanedValue) {
+            addNewKeyword(keywordInputValue, cleanedValue);
+        } else {
+            console.warn("Le mot-clé est vide ou contient seulement des caractères spéciaux !");
+        }
+
     });
 
     inputElement.addEventListener('input', (event) => {
